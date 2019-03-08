@@ -11,12 +11,13 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MultiBubbleChartView extends View {
+public class MultiBubbleChartView extends AbstractChartView {
     private float mAvgW;//每个点平均分到的宽度
     private float mChartW;//气泡图的宽度
     private float mChartH;//气泡图的高度
@@ -42,10 +43,12 @@ public class MultiBubbleChartView extends View {
     private int mSelectedIndex;
     private float mValueRatio;
     private int mXTextHeight;
-    private int mBubbleColor = Color.parseColor("#80ff0000");
-    private int mXSpaceCount = 12;
+    private int mBubbleColor = Color.parseColor("#0ece6d");
+    private int mXSpaceCount = 30;
     private LinkedHashMap<String, MultiBubbleData> mData;
     private BubbleData mIsSelBubble;
+    private int mWidth;
+    private int mHeight;
 
     public MultiBubbleChartView(Context context) {
         super(context);
@@ -72,7 +75,7 @@ public class MultiBubbleChartView extends View {
     private void init(Context context) {
         mXTextSize = UiUtils.dip2px(context, 10);//默认字体大小10dp
         mYTextSize = UiUtils.dip2px(context, 10);//默认字体大小10dp
-        mRadius = UiUtils.dip2px(context, 3);//气泡的半径
+        mRadius = UiUtils.dip2px(context, 4);//气泡的半径
         mLineMargin = UiUtils.dip2px(context, 1);
         mXTextPaint = new Paint();
         mYTtextPaint = new Paint();
@@ -112,46 +115,63 @@ public class MultiBubbleChartView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        canvas.drawLine(0, mChartH, getWidth(), mChartH, mLinePaint);
+        computeSize();
+        if (mData == null) {
 
+            drawEmpty(canvas);
+        } else {
+            drawBubble(canvas);
+            if (mIsTouch) {
+
+
+                drawXYTrip(canvas);
+            }
+        }
+
+
+    }
+
+    private void drawBubble(Canvas canvas) {
+
+        canvas.drawLine(0, mChartH, mWidth, mChartH, mLinePaint);
         int index = 0;
         for (String key : mData.keySet()) {
             if (index % mXSpaceCount == 0) {//判断间隔多少个点画一个x轴坐标
 
-                float y = getHeight() - getPaddingBottom();
+                float y = mHeight - getPaddingBottom();
                 Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
                 mXTextPaint.getFontMetrics(fontMetrics);
                 float stringWidth = mXTextPaint.measureText(key);
                 float x = (mAvgW * index + getPaddingLeft() + mRadius - stringWidth / 2);
                 canvas.drawText(key, x, y, mXTextPaint);
             }
-            List<BubbleData> bubbleValues = mData.get(key).values;
-            for (int i = 0; i < bubbleValues.size(); i++) {
-                //绘制坐标文本
-                BubbleData bubble = bubbleValues.get(i);
+            MultiBubbleData multiBubbleData = mData.get(key);
+            if (multiBubbleData != null) {
+                List<BubbleData> bubbleValues = multiBubbleData.values;
+                if (bubbleValues != null) {
+                    for (int i = 0; i < bubbleValues.size(); i++) {
+                        //绘制坐标文本
+                        BubbleData bubble = bubbleValues.get(i);
 
-                //绘制气泡
-                if (bubble.value != 0) {
+                        //绘制气泡
+                        if (bubble.value != 0) {
 
-                    canvas.drawCircle(bubble.x, bubble.y, mRadius, mBubblePaint);
+                            canvas.drawCircle(bubble.x, bubble.y, mRadius, mBubblePaint);
+                        }
+
+                    }
                 }
 
             }
             index++;
         }
-
-
-        if (mIsTouch) {
-
-
-            drawXYTrip(canvas);
-        }
     }
 
     private void drawXYTrip(Canvas canvas) {
-        if(mIsSelBubble==null){
+        if (mIsSelBubble == null) {
             return;
         }
+        mTouchY = mIsSelBubble.y;
         float x = mIsSelBubble.x + mRadius;
         float y = mIsSelBubble.y - mRadius;
         canvas.drawText(String.valueOf(mIsSelBubble.value), x, y, mXTextPaint);
@@ -165,7 +185,7 @@ public class MultiBubbleChartView extends View {
 
             Rect rectX = new Rect();
             float widthX = mYTtextPaint.measureText(xText);//y轴值字体宽度
-            rectX.set((int) (mIsSelBubble.x - widthX / 2), getHeight() - getPaddingBottom() - mXTextHeight, (int) (mIsSelBubble.x + widthX / 2), getHeight() - getPaddingBottom());
+            rectX.set((int) (mIsSelBubble.x - widthX / 2), mHeight - getPaddingBottom() - mXTextHeight, (int) (mIsSelBubble.x + widthX / 2), mHeight - getPaddingBottom());
             int baseLineY = (int) (rectX.centerY() - top / 2 - bottom / 2);//基线中间点的y轴计算公式
             canvas.drawRect(rectX, mYTripBgPaint);
             canvas.drawText(xText, rectX.left, baseLineY, mYTtextPaint);
@@ -185,7 +205,7 @@ public class MultiBubbleChartView extends View {
         canvas.drawText(valueY + "", 0, baseLineY, mYTtextPaint);
 
         //画X轴标线
-        canvas.drawLine(yTextW, mTouchY, getWidth(), mTouchY, mIndicatrixPaint);
+        canvas.drawLine(yTextW, mTouchY, mWidth, mTouchY, mIndicatrixPaint);
         //画Y轴标线
         canvas.drawLine(mIsSelBubble.x, 0, mIsSelBubble.x, mChartH, mIndicatrixPaint);
     }
@@ -194,28 +214,34 @@ public class MultiBubbleChartView extends View {
     public boolean onTouchEvent(MotionEvent event) {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-            case MotionEvent.ACTION_MOVE:
-                mTouchX = event.getX();
-                mTouchY = event.getY();
-                mIsTouch = true;
+                if (mData != null) {
+                    mTouchX = event.getX();
+                    mTouchY = event.getY();
+                    mIsTouch = true;
 
-                for (String key : mData.keySet()) {
-                    MultiBubbleData multiBubbleData = mData.get(key);
-                    List<BubbleData> values = multiBubbleData.values;
-                    for (int i = 0; i < values.size(); i++) {
-                        if (values.get(i).isInside(event.getX(), event.getY(), mRadius)) {
+                    for (String key : mData.keySet()) {
+                        MultiBubbleData multiBubbleData = mData.get(key);
+                        if (multiBubbleData != null) {
+                            List<BubbleData> values = multiBubbleData.values;
+                            for (int i = 0; i < values.size(); i++) {
+                                if (values.get(i).isInside(event.getX(), event.getY(), mRadius)) {
 //                        enableGrowAnimation = false;
 //                        invalidate();
-                            mIsSelBubble = values.get(i);
+                                    mIsSelBubble = values.get(i);
+                                }
+                            }
                         }
                     }
                 }
                 invalidate();
                 break;
+//            case MotionEvent.ACTION_MOVE:
+//
+//                break;
             case MotionEvent.ACTION_UP:
 //                mSelectedIndex = -1;
 //                enableGrowAnimation = false;
-                mIsTouch = false;
+//                mIsTouch = false;
                 invalidate();
                 break;
         }
@@ -223,23 +249,66 @@ public class MultiBubbleChartView extends View {
     }
 
     @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        mWidth = View.MeasureSpec.getSize(widthMeasureSpec);
+        mHeight = View.MeasureSpec.getSize(heightMeasureSpec);
+    }
+
+    public static float getMaxValue(Map<String, MultiBubbleData> map) {
+        float maxValue = 0;
+
+        for (String key : map.keySet()) {
+
+            MultiBubbleData multiBubbleData = map.get(key);
+            if (multiBubbleData != null) {
+
+                List<BubbleData> values = multiBubbleData.values;
+                if (values != null && values.size() != 0) {
+                    BubbleData max = Collections.max(values);
+                    maxValue = maxValue > max.value ? maxValue : max.value;
+                }
+            }
+
+        }
+
+        return maxValue;
+
+    }
+
+
+    public void setBubbleData(LinkedHashMap<String, MultiBubbleData> data) {
+        mData = data;
+
+        invalidate();
+    }
+
+    private void computeSize() {
+        if (mData == null) {
+            return;
+        }
         String xText = mData != null ? mData.keySet().iterator().next() : "";
 
         mXTextPaint.getTextBounds(xText, 0, xText.length(), mXTextRect);
-        mChartW = w - getPaddingLeft() - getPaddingRight() - mRadius * 2;//获取气泡图图表区的宽度
+        mChartW = mWidth - getPaddingLeft() - getPaddingRight() - mRadius * 2;//获取气泡图图表区的宽度
         mXTextHeight = mXTextRect.height();
-        mChartH = h - getPaddingTop() - getPaddingBottom() - mXTextHeight - mRadius;//获取气泡图图表区高度
+        mChartH = mHeight - getPaddingTop() - getPaddingBottom() - mXTextHeight - mRadius;//获取气泡图图表区高度
+        //计算X轴坐标的平均宽度
         mAvgW = mChartW / (mData.size() - 1);
         //计算气泡图最大高度与最大数值的比例
-        float maxValue = getMaxValue(mData)*2;
+        float maxValue = getMaxValue(mData) * 1.2f;
         float heightRatio = (mChartH - mGap) / maxValue;
         //计算气泡图最大数值与最大高度的比例
         mValueRatio = maxValue / (mChartH - mGap);
         int index = 0;
+        //遍历map集合获取每个圆点的x,y坐标
         for (String key : mData.keySet()) {
             MultiBubbleData multiBubbleData = mData.get(key);
+            if (multiBubbleData == null) {
+                multiBubbleData = new MultiBubbleData();
+                multiBubbleData.values = new ArrayList<>();
+                mData.put(key, multiBubbleData);
+            }
             List<BubbleData> bubbleValues = multiBubbleData.values;
             float x = mAvgW * index + getPaddingLeft() + mRadius;
             multiBubbleData.x = x;
@@ -253,28 +322,5 @@ public class MultiBubbleChartView extends View {
             }
             index++;
         }
-
-    }
-
-    public static float getMaxValue(Map<String, MultiBubbleData> map) {
-        float maxValue = 0;
-
-        for (String key : map.keySet()) {
-
-            List<BubbleData> values = map.get(key).values;
-            if (values != null && values.size() != 0) {
-                BubbleData max = Collections.max(values);
-                maxValue = maxValue > max.value ? maxValue : max.value;
-            }
-
-        }
-
-        return maxValue;
-
-    }
-
-
-    public void setBubbleData(LinkedHashMap<String, MultiBubbleData> data) {
-        mData = data;
     }
 }

@@ -1,5 +1,6 @@
 package com.example.jiac.chartdemo;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -8,7 +9,7 @@ import java.util.List;
  * author   caojiaxu
  * desc
  */
-public class MultiBubbleData {
+public class MultiBubbleData implements Serializable {
     public float x;
     public String xText;
     public List<BubbleData> values;
